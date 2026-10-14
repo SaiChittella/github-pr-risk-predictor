@@ -14,8 +14,26 @@
     "additions": 33,
     "deletions": 1,
     "changed_files": 2,
-    "files": [
-        "fastapi/encoders.py",
-        "tests/test_jsonable_encoder.py"
-    ]
+    "files": {
+        "fastapi/encoders.py": {
+            "status": "modified",
+            "additions": 14,
+            "deletions": 1,
+            "changes": 15,
+            "blob_url": "https://github.com/fastapi/fastapi/blob/2106dbde3c4e5bd350eec07442f9599d0253a2a7/fastapi%2Fencoders.py",
+            "raw_url": "https://github.com/fastapi/fastapi/raw/2106dbde3c4e5bd350eec07442f9599d0253a2a7/fastapi%2Fencoders.py",
+            "contents_url": "https://api.github.com/repos/fastapi/fastapi/contents/fastapi%2Fencoders.py?ref=2106dbde3c4e5bd350eec07442f9599d0253a2a7",
+            "merged_at": null
+        },
+        "tests/test_jsonable_encoder.py": {
+            "status": "modified",
+            "additions": 19,
+            "deletions": 0,
+            "changes": 19,
+            "blob_url": "https://github.com/fastapi/fastapi/blob/2106dbde3c4e5bd350eec07442f9599d0253a2a7/tests%2Ftest_jsonable_encoder.py",
+            "raw_url": "https://github.com/fastapi/fastapi/raw/2106dbde3c4e5bd350eec07442f9599d0253a2a7/tests%2Ftest_jsonable_encoder.py",
+            "contents_url": "https://api.github.com/repos/fastapi/fastapi/contents/tests%2Ftest_jsonable_encoder.py?ref=2106dbde3c4e5bd350eec07442f9599d0253a2a7",
+            "merged_at": null
+        }
+    }
 }
