@@ -11,8 +11,6 @@ class Config:
     base_url: str
     owner: str
     repo: str
-    pull_number: int
-    pr_record: dict = None
 
 
 def load_env():
@@ -27,25 +25,53 @@ def load_env():
     base_url = "https://api.github.com"
     owner = "fastapi"
     repo = "fastapi"
-    pull_number = 16350
 
     return Config(
         headers=headers,
         base_url=base_url,
         owner=owner,
         repo=repo,
-        pull_number=pull_number
     )
+
+def paginate_pr_files(url: str, config: Config):
+    all_files = []
+    page = 1
+
+    while True:
+        response = requests.get(
+            f"{url}/files",
+            headers=config.headers,
+            params={
+                "page": page,
+                "per_page": 100
+            }
+        )
+
+        if not check_reponse(response):
+            return None
+
+        page_files = response.json()
+
+        if len(page_files) == 0:
+            break
+
+        all_files.extend(page_files)
+        page += 1
+
+    return all_files
 
 def build_pr_data(url:str, config:Config):
     data = requests.get(url, headers=config.headers)
-    file_data = requests.get(f"{url}/files", headers=config.headers)
+    file_data = paginate_pr_files(url, config)
 
-    if not check_reponse(data) or not check_reponse(file_data):
+    if not check_reponse(data):
         return None
     
     data = data.json()
-    file_data = file_data.json() 
+
+    if file_data is None or len(file_data) != data["changed_files"]:
+        print(f"Mismatch in changed files count for PR #{data['number']}: expected {data['changed_files']}, got {len(file_data)}")
+        return None
 
     return {
         "repository": f"{config.owner}/{config.repo}",
@@ -53,8 +79,8 @@ def build_pr_data(url:str, config:Config):
         "title": data["title"],
         "author": data["user"]["login"],
         "created_at": data["created_at"],
-        'merged_at': data["merged_at"],
         "updated_at": data["updated_at"],
+        'merged_at': data["merged_at"],
         "state": data["state"],
         "merged": data["merged"],
         "mergeable": data["mergeable"],
@@ -65,8 +91,8 @@ def build_pr_data(url:str, config:Config):
         "additions": data["additions"],
         "deletions": data["deletions"],
         "changed_files": data["changed_files"],
-        "head.shah": data["head"]["sha"],
-        "base.shah": data["base"]["sha"],
+        "head_sha": data["head"]["sha"],
+        "base_sha": data["base"]["sha"],
         "merge_commit_sha": data["merge_commit_sha"],
         "files": {
             file_info["filename"]: {
@@ -82,18 +108,28 @@ def build_pr_data(url:str, config:Config):
         },
     }
 
-    # write_to_json(pr_data, "data/raw/sample_pr.json")
-
-def write_to_json(data: dict, file_path: str):
+def write_to_json(data: list, file_path: str):
     with open(file_path, "w") as file:
         json.dump(data, file, indent=4)
 
-def get_repo_prs(merged_prs, response : requests.Response):
+def get_repo_prs(merged_prs, response : requests.Response, config: Config, target: int):
     pr_data = response.json()
 
     for pr in pr_data:
         if pr.get("merged_at") is not None:
-            merged_prs.append(build_pr_data(pr.get("url"), config))
+            pr = build_pr_data(pr.get("url"), config)
+            
+            if pr in merged_prs or not validate_pr(pr):
+                print(f"Invalid PR data for PR #{pr.get('pr_number')}. Skipping.")
+                continue
+
+            merged_prs.append(pr)
+            print(
+                f"Added PR #{pr['pr_number']} "
+                f"({len(merged_prs)}/{target})"
+            )
+        if len(merged_prs) >= target:
+            break
 
 def check_reponse(response: requests.Response):
     if response.status_code != 200:
@@ -101,18 +137,32 @@ def check_reponse(response: requests.Response):
         return False
     return True
 
+def validate_pr(pr: dict):
+    return (
+    pr is not None
+    and pr.get("repository") is not None
+    and pr.get("pr_number") is not None
+    and pr.get("merged_at") is not None
+    and pr.get("changed_files") >= 0
+    and pr.get("additions") >= 0
+    and pr.get("deletions") >= 0
+    and len(pr.get("files")) == pr.get("changed_files")
+    and pr.get("merge_commit_sha") is not None
+    and pr.get("head_sha") is not None
+    and pr.get("base_sha") is not None
+)
+
 if __name__ == "__main__":
     config = load_env()
     headers = config.headers
     base_url = config.base_url
     owner = config.owner
     repo = config.repo
-    pull_number = config.pull_number
-   
-    # GET https://github.com{owner}/{repo}/pulls?state=closed&page={page_number}&per_page={results_per_page}
+ 
     merged_prs = []
-    target = 100
+    target = 20
     page = 1
+
 
     while len(merged_prs) < target:
         response = requests.get(f"{base_url}/repos/{owner}/{repo}/pulls", headers=headers, params={"state": "closed", "page": page, "per_page": 20})
@@ -124,17 +174,9 @@ if __name__ == "__main__":
             print("No more PRs to fetch.")
             break
 
-        get_repo_prs(merged_prs, response)
+        get_repo_prs(merged_prs, response, config, target)
         page += 1
 
+    print(f"Collected {len(merged_prs)} merged PRs.")
     write_to_json(merged_prs, f"data/raw/{owner}_{repo}_merged_prs.json")
-
-
-    # response = requests.get(f"{base_url}/repos/{owner}/{repo}/pulls/{pull_number}", headers=headers)
-    # response_file = requests.get(f"{base_url}/repos/{owner}/{repo}/pulls/{pull_number}/files", headers=headers)
-
-    # if response.status_code != 200 or response_file.status_code != 200:
-    #     print(f"Error: {response.status_code} - {response.text}")
-    #     print(f"Error: {response_file.status_code} - {response_file.text}")
-    # else:
-    #     get_pr_data(config, response, response_file)
+    print(f"Saved data to data/raw/{owner}_{repo}_merged_prs.json")
